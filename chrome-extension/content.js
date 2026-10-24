@@ -4074,6 +4074,37 @@
     return true;
   }
 
+  const QUESTION_TEXT_SELECTOR =
+    '.assessment_question label, .question-heading, .question_text, h1, h2, h3, h4, h5, h6, strong, b';
+
+  /**
+   * Internshala puts the real question in a bold `.assessment_question > label`.
+   * `.label_faded` is template boilerplate (upload links etc.) and must never
+   * become the question.
+   */
+  function questionLabelNear(field) {
+    const container = field.closest(
+      '.additional_question, .assessment_question, .form-group, .question-group'
+    );
+
+    if (!container) return '';
+
+    const candidates = Array.from(
+      container.querySelectorAll(QUESTION_TEXT_SELECTOR)
+    );
+
+    for (const candidate of candidates) {
+      if (candidate.contains(field)) continue;
+      if (candidate.closest('.label_faded, [class*="faded"]')) continue;
+      if (!isVisible(candidate)) continue;
+
+      const text = cleanQuestionText(elementText(candidate));
+      if (text.length >= 3 && text.length <= 400) return text;
+    }
+
+    return '';
+  }
+
   function fieldLabel(field) {
     const labelledBy = field.getAttribute('aria-labelledby');
     if (labelledBy) {
@@ -4091,10 +4122,14 @@
 
     if (field.labels && field.labels.length) {
       for (const label of field.labels) {
+        if (!isVisible(label)) continue;
         const text = elementText(label);
         if (text) return text;
       }
     }
+
+    const nearLabel = questionLabelNear(field);
+    if (nearLabel) return nearLabel;
 
     let node = field;
     for (let depth = 0; depth < 5 && node; depth += 1) {
@@ -4103,7 +4138,9 @@
       while (sibling) {
         if (
           !sibling.matches('input, textarea, select, button') &&
-          !sibling.querySelector('input, textarea, select, button')
+          !sibling.querySelector('input, textarea, select, button') &&
+          !sibling.matches('.label_faded, [class*="faded"]') &&
+          isVisible(sibling)
         ) {
           const text = elementText(sibling);
           if (text.length >= 3 && text.length <= 300) return text;
@@ -4156,6 +4193,9 @@
       }
     }
 
+    const nearLabel = questionLabelNear(first);
+    if (nearLabel) return nearLabel;
+
     let node = first.parentElement;
 
     for (let depth = 0; depth < 6 && node && node !== document.body; depth += 1) {
@@ -4170,7 +4210,9 @@
         } else if (
           child.nodeType === 1 &&
           !child.matches('input, textarea, select, button') &&
-          !child.querySelector('input, textarea, select, button')
+          !child.matches('.label_faded, [class*="faded"]') &&
+          !child.querySelector('input, textarea, select, button') &&
+          isVisible(child)
         ) {
           const text = elementText(child);
           if (text.length >= 3 && text.length <= 300) return text;
@@ -4181,7 +4223,9 @@
       while (sibling) {
         if (
           !sibling.matches('input, textarea, select, button') &&
-          !sibling.querySelector('input, textarea, select, button')
+          !sibling.matches('.label_faded, [class*="faded"]') &&
+          !sibling.querySelector('input, textarea, select, button') &&
+          isVisible(sibling)
         ) {
           const text = elementText(sibling);
           if (text.length >= 3 && text.length <= 300) return text;
