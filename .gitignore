@@ -8,6 +8,10 @@ agent.md
 agents.md
 AGENT.md
 
+# Local-only Chrome Web Store submission notes
+PUBLISHING.md
+store/listing.md
+
 # Generated build output and release archives
 dist/
 *.zip

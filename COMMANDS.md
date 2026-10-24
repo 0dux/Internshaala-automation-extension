@@ -212,7 +212,9 @@ Developer Dashboard.
    `store/listing.md` before submitting, and put the real store URL in
    `README.md`.
 
-Full checklist: `PUBLISHING.md`.
+`PUBLISHING.md` and `store/listing.md` are kept locally and are gitignored, so
+they will not exist in a fresh clone; the full submission checklist is in
+`PUBLISHING.md`.
 
 ---
 

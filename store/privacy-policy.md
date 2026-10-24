@@ -17,6 +17,10 @@ This information stays in your browser. It is not sent to the developer or to an
 
 On an Internshala application page, the extension reads the labels, field types, and available options of the application form so it can match a question to an answer you saved earlier and fill it in. It does not read your account profile, applications, messages, resume files, or credentials.
 
+Saved answer text is placed in the panel only while you are viewing the Answers tab. When the panel is closed, saved answers are not present in page-readable HTML.
+
+The panel ignores scripted clicks from the page. Starting a queue, marking an application, clearing history, or submitting requires real keyboard or mouse input from you.
+
 ## How the apply queue works
 
 When you start a queue on an Internshala search page, the extension records the listings on that page, opens them one at a time, and clicks Internshala's own Apply control to reach the application form. It fills saved answers and then stops at a review card. Internshala's submit button is clicked only after you press "Submit application" in that card. The extension does not submit anything on its own.
@@ -27,9 +31,10 @@ The extension never stores or fills passwords, OTPs, CAPTCHA responses, payment 
 
 - No account or login.
 - No analytics, tracking, advertising, or profiling.
-- No network requests.
-- No access to your Internshala account, applications, messages, resumes, or credentials.
+- No network requests and no remote code.
 - No selling, renting, or sharing of data.
+- It does not read your Internshala account, applications, messages, resumes, or credentials.
+- It does not act on scripted clicks; only your own input can drive it.
 
 ## Export and import
 

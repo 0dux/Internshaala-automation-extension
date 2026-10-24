@@ -1,6 +1,8 @@
 # Internshala Saved Filters
 
-A Chrome extension (and optional Tampermonkey userscript) that remembers your Internshala search filters, restores them in one click, and reuses your answers to repeat application questions.
+A Chrome extension (and optional Tampermonkey userscript) that remembers your Internshala search filters, restores them in one click, reuses your answers to repeat application questions, and walks through listings with an assisted apply queue that you submit yourself.
+
+Current release: **1.3.0** — filters, reusable answers, and the assisted apply queue. Title-keyword filtering and auto-submit are not included yet.
 
 ![Saved filters panel](preview.png)
 
@@ -31,6 +33,8 @@ That also means a plain browser bookmark is enough for a no-install solution. Th
 - **Prompts for new questions** instead of guessing, with an Answers tab to search, edit, and delete saved answers.
 - **Queues listings into an assisted apply flow**: it opens each listing, fills the form from your saved answers, and shows a review card. It submits only after you press **Submit application**.
 - Tracks **applied history** so listings you already applied to are skipped next time, with a 20-per-24-hours cap and a cooldown between applications.
+- **Only acts on your clicks.** The panel ignores scripted clicks, so page code cannot start a queue, mark applications, or press **Submit application** for you.
+- **Keeps saved answers out of the page** when you are not looking at them: the Answers list is rendered only while that tab is open.
 - Stores everything **locally in your browser**. No account, no server, no network requests.
 - Has a small, isolated UI built with Shadow DOM, so Internshala's CSS does not affect it.
 - Starts with **no presets**. You add only the searches you actually use.
@@ -59,9 +63,9 @@ The extension requests only the `storage` permission, which keeps saved applicat
 npm.cmd run package
 ```
 
-The file is created at `dist/internshala-saved-filters-1.3.0.zip`. The zip has `manifest.json` at its root, ready for the Chrome Web Store.
+The file is created at `dist/internshala-saved-filters-1.3.0.zip`. The zip has `manifest.json` at its root and contains only the eight runtime files, ready for the Chrome Web Store.
 
-See [`PUBLISHING.md`](PUBLISHING.md) for the full upload and review checklist.
+Store-submission notes live in `PUBLISHING.md` and `store/listing.md`, which are kept locally and are not committed to Git. See [`COMMANDS.md`](COMMANDS.md) for every build, test, and release command.
 
 ## Install the Tampermonkey userscript (alternative)
 
@@ -162,7 +166,9 @@ Python is still a good choice if you later want something different, such as a s
   `Full Stack Development, Front End Development in Delhi`.
 - Stores presets and the last search in `localStorage` under the key `isf:v1`.
 - Reads application question labels and options, looks for an exact saved match, and fills text, select, radio, and checkbox fields through native events.
-- Stores saved answers separately (`chrome.storage.local` in the extension, `localStorage` in the userscript) so page scripts cannot read them.
+- Stores saved answers outside the page: `chrome.storage.local` in the extension (not readable by page scripts), with a `localStorage` fallback in the userscript.
+- Renders saved answers into the panel only while the Answers tab is open, so a closed panel leaves none in the page-readable DOM.
+- Requires real user input for every mutating action; synthetic clicks from page scripts are ignored.
 - Keeps the apply queue and applied history in the same private storage, so progress survives page navigation and reopened tabs.
 - Paces the queue: one application at a time, one tab, 8–15 second cooldown, and a daily limit.
 - Exports and imports the same filter data as JSON, merging presets by their cleaned URL.
@@ -175,8 +181,10 @@ The Chrome extension's content script is generated from the userscript, so both 
 
 - Saved searches and settings stay in `localStorage` on `internshala.com` under `isf:v1`.
 - Saved application answers stay in `chrome.storage.local` when the extension is used, and in `localStorage` under `isf:answers:v1` in the userscript. The apply queue, settings, and applied history use the same storage.
+- In the Tampermonkey userscript that fallback is page-readable: scripts on `internshala.com` could read answers and queue data stored in `localStorage`. The Chrome extension keeps the same data in `chrome.storage.local`, which page scripts cannot read.
 - The extension makes no network requests. It reads application form labels and options only on Internshala application pages, so it can match and fill saved answers.
 - It does not read your account profile, applications, messages, resume files, or credentials. It clicks Internshala's submit button only after you press **Submit application** in the review card, and it never ticks consent boxes or attaches files.
+- The panel ignores scripted clicks (calls to `click()` from page code), so only a real press can start a queue, mark applications, or submit. Saved answer text is rendered only while the Answers tab is open.
 - The toolbar popup is a static help card with a link to Internshala.
 - Clearing the site's cookies/site data removes saved searches; extension storage is removed by uninstalling the extension or clearing its data.
 - Saved searches, answers, and queue progress do not sync between browsers or devices. Use Export/Import to move searches.
@@ -190,6 +198,8 @@ The full policy is in [`store/privacy-policy.md`](store/privacy-policy.md).
 - Imports are capped at 2 MB / 500 presets to keep the panel responsive. Saving new searches is not capped.
 - Answers match only when the question text is the same (ignoring case, spacing, and required markers). Reworded questions are asked again.
 - The apply queue works on the listings of the current page. Pagination, retries, and auto-submit are not included yet.
+- In the Tampermonkey userscript, saved answers and queue data live in `localStorage`, which scripts on `internshala.com` can read. Use the Chrome extension if that matters to you.
+- The panel only responds to real clicks and keystrokes, so browser automation must send real input events rather than calling `.click()`.
 - The assistant never attaches files, solves CAPTCHAs, ticks consent boxes, or signs in for you. It pauses and waits for you in those cases.
 - If Internshala changes its application form markup, the assistant stops with a "layout changed" style message instead of clicking blindly.
 - Applied history records what the assistant saw. If you apply manually outside the queue, that listing is not known until it shows an "already applied" state or you press **Mark applied**.
@@ -210,10 +220,13 @@ The full policy is in [`store/privacy-policy.md`](store/privacy-policy.md).
 | `scripts/build-extension.mjs` | Regenerates `content.js` and syncs the version |
 | `scripts/generate-assets.ps1` | Regenerates icons and store images |
 | `scripts/package-extension.ps1` | Builds the uploadable zip |
-| `store/` | Listing copy, privacy policy, screenshot, promo tile |
+| `COMMANDS.md` | Build, test, and release command reference |
+| `store/privacy-policy.md` | Privacy policy |
+| `store/*.png` | Store screenshot and promo tile |
 | `dist/` | Uploadable Chrome Web Store zip |
-| `PUBLISHING.md` | Step-by-step store submission guide |
 | `preview.png` | Screenshot of the panel |
+
+`PUBLISHING.md`, `store/listing.md`, `plan.md`, and `AGENTS.md` are kept locally for the maintainer and are not committed to Git.
 
 ## Development
 
@@ -232,14 +245,17 @@ npm.cmd run package
 
 `chrome-extension/content.js` is generated. Do not edit it directly.
 
+The extension is covered by a CDP harness that drives Chrome for Testing 136 and runs 62 checks across filters, answers, the apply queue, and a forged-click rejection. It lives outside the repository; the exact commands are in [`COMMANDS.md`](COMMANDS.md).
+
 ## Publishing
 
-See [`PUBLISHING.md`](PUBLISHING.md). The short version:
+The zip is already built at `dist/internshala-saved-filters-1.3.0.zip`. To publish a new build:
 
 1. Test with **Load unpacked**.
-2. Upload `dist/internshala-saved-filters-1.3.0.zip` to the Chrome Web Store Developer Dashboard.
-3. Use the copy in [`store/listing.md`](store/listing.md).
-4. Answer the privacy questions as "no data collected."
-5. Submit for review.
+2. Run `npm.cmd run package`.
+3. Upload `dist/internshala-saved-filters-1.3.0.zip` to the Chrome Web Store Developer Dashboard.
+4. Use the copy in `store/listing.md` and follow `PUBLISHING.md`; both are kept locally and are not committed.
+5. Answer the privacy questions as "no data collected."
+6. Submit for review.
 
 The extension name uses "Internshala" descriptively. The listing and popup clearly say it is unofficial. If review objects, rename it to **Saved Filters for Internshala**.
