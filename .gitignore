@@ -1,0 +1,50 @@
+# Local planning and agent context
+# These files are intentionally kept on disk but out of Git.
+plan.md
+plants.md
+plans.md
+AGENTS.md
+agent.md
+agents.md
+AGENT.md
+
+# Generated build output and release archives
+dist/
+*.zip
+
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tmp
+*.temp
+.cache/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+*.swp
+
+# Local test artifacts, browser profiles, and coverage
+.chrome-profile/
+test-results/
+playwright-report/
+coverage/

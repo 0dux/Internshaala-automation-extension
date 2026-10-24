@@ -1,0 +1,152 @@
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 326px;
+  margin: 0;
+  background: #f4fafe;
+  color: #0f2433;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.popup {
+  padding: 18px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.mark {
+  display: grid;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid #d5e8f4;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #0b78b5;
+  box-shadow: 0 4px 12px rgba(9, 54, 82, 0.06);
+}
+
+.mark svg {
+  width: 19px;
+  height: 19px;
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.title strong {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.title small {
+  color: #5f7484;
+  font-size: 11.5px;
+}
+
+.intro {
+  margin: 0 0 13px;
+  color: #425d6f;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.intro b {
+  color: #0f2433;
+  font-weight: 650;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0 0 15px;
+  padding: 12px;
+  border: 1px solid #e0edf5;
+  border-radius: 12px;
+  background: #ffffff;
+  list-style: none;
+}
+
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #425d6f;
+  font-size: 12px;
+}
+
+.steps span {
+  display: grid;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 50%;
+  background: #eaf5fc;
+  color: #0b78b5;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  border-radius: 10px;
+  background: #0b78b5;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+  transition: background 130ms ease;
+}
+
+.button:hover {
+  background: #075f92;
+}
+
+.button:focus-visible {
+  outline: 3px solid rgba(11, 120, 181, 0.3);
+  outline-offset: 2px;
+}
+
+.button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.note {
+  margin: 12px 0 0;
+  color: #5f7484;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.fine {
+  margin: 8px 0 0;
+  color: #8a9daa;
+  font-size: 10px;
+  text-align: center;
+}
