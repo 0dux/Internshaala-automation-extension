@@ -2,7 +2,7 @@
 
 A Chrome extension (and optional Tampermonkey userscript) that remembers your Internshala search filters, restores them in one click, reuses your answers to repeat application questions, and walks through listings with an assisted apply queue that you submit yourself.
 
-Current release: **1.3.3** — filters, reusable answers, and the assisted apply queue, with fixes for the real site's apply card, question labels, and card focus. Title-keyword filtering and auto-submit are not included yet.
+Current release: **1.3.4** — filters, reusable answers, and the assisted apply queue, with fixes for the real site's apply card, question labels, card focus, and grammar-add-on overlays. Title-keyword filtering and auto-submit are not included yet.
 
 ![Saved filters panel](preview.png)
 
@@ -63,7 +63,7 @@ The extension requests only the `storage` permission, which keeps saved applicat
 npm.cmd run package
 ```
 
-The file is created at `dist/internshala-saved-filters-1.3.3.zip`. The zip has `manifest.json` at its root and contains only the eight runtime files, ready for the Chrome Web Store.
+The file is created at `dist/internshala-saved-filters-1.3.4.zip`. The zip has `manifest.json` at its root and contains only the eight runtime files, ready for the Chrome Web Store.
 
 Store-submission notes live in `PUBLISHING.md` and `store/listing.md`, which are kept locally and are not committed to Git. See [`COMMANDS.md`](COMMANDS.md) for every build, test, and release command.
 
@@ -248,15 +248,15 @@ npm.cmd run package
 
 `chrome-extension/content.js` is generated. Do not edit it directly.
 
-The extension is covered by a CDP harness that drives Chrome for Testing 136 and runs 68 checks across filters, answers, text and choice question cards, the apply queue, a forged-click rejection, and focus over the site's modal. It lives outside the repository; the exact commands are in [`COMMANDS.md`](COMMANDS.md).
+The extension is covered by a CDP harness that drives Chrome for Testing 136 and runs 72 checks across filters, answers, text and choice question cards, the apply queue, a forged-click rejection, focus over the site's modal, and stripping of grammar-add-on overlays. It lives outside the repository; the exact commands are in [`COMMANDS.md`](COMMANDS.md).
 
 ## Publishing
 
-The zip is already built at `dist/internshala-saved-filters-1.3.3.zip`. To publish a new build:
+The zip is already built at `dist/internshala-saved-filters-1.3.4.zip`. To publish a new build:
 
 1. Test with **Load unpacked**.
 2. Run `npm.cmd run package`.
-3. Upload `dist/internshala-saved-filters-1.3.3.zip` to the Chrome Web Store Developer Dashboard.
+3. Upload `dist/internshala-saved-filters-1.3.4.zip` to the Chrome Web Store Developer Dashboard.
 4. Use the copy in `store/listing.md` and follow `PUBLISHING.md`; both are kept locally and are not committed.
 5. Answer the privacy questions as "no data collected."
 6. Submit for review.

@@ -13,7 +13,7 @@ The project has **no dependencies**, so there is no `npm install` step.
 The release zip is already built:
 
 ```
-dist/internshala-saved-filters-1.3.3.zip
+dist/internshala-saved-filters-1.3.4.zip
 ```
 
 Re-run the package command only after changing the code. `dist/` is
@@ -67,7 +67,7 @@ It prints the zip path, byte size, and entry list.
 ## Verify the zip by hand
 
 ```powershell
-$zip = "dist\internshala-saved-filters-1.3.3.zip"
+$zip = "dist\internshala-saved-filters-1.3.4.zip"
 $tmp = Join-Path $env:TEMP "isf-zipcheck"
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 Expand-Archive $zip $tmp
@@ -82,14 +82,14 @@ $manifest = Get-Content "$tmp\manifest.json" -Raw | ConvertFrom-Json
 Remove-Item $tmp -Recurse -Force
 ```
 
-Expected: `version=1.3.3`, `permissions=storage`, `hostPermissions=` (empty).
+Expected: `version=1.3.4`, `permissions=storage`, `hostPermissions=` (empty).
 
 ---
 
 ## Bump the version
 
 ```powershell
-# 1. Edit the // @version line at the top of the userscript, e.g. 1.3.4
+# 1. Edit the // @version line at the top of the userscript, e.g. 1.3.5
 # 2. Sync it into the manifest and package.json
 npm.cmd run build
 
@@ -123,7 +123,7 @@ node isf-cdp-test.mjs
 ```
 
 It launches CFT 136 with this extension, serves a synthetic application form at
-a real Internshala application URL via CDP `Fetch`, and runs 68 checks covering
+a real Internshala application URL via CDP `Fetch`, and runs 72 checks covering
 filters, answers, the apply queue, and a forged-click rejection. Results are
 written to `%TEMP%\isf-report.json`; the profile is
 `%TEMP%\isf-profile-<timestamp>`.
@@ -205,7 +205,7 @@ The upload itself must be done by the account owner in the Chrome Web Store
 Developer Dashboard.
 
 1. `npm.cmd run package`
-2. Upload `dist/internshala-saved-filters-1.3.3.zip`.
+2. Upload `dist/internshala-saved-filters-1.3.4.zip`.
 3. Paste the copy from `store/listing.md`.
 4. Answer the privacy questions as "no data collected".
 5. Replace `[your-email@example.com]` in `store/privacy-policy.md` and

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Internshala Saved Filters",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "Save Internshala searches and reuse answers to repeat application questions. Local-only; unofficial.",
   "minimum_chrome_version": "96",
   "icons": {
