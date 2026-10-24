@@ -129,10 +129,12 @@ Only exact question matches are filled. If a saved answer does not fit the field
 
 1. Open a filtered internships or jobs search page.
 2. Click **Saved filters** → **Apply** → **Start queue**. The panel lists the cards on the page, drops listings already in your applied history, and asks you to confirm the queue.
-3. The assistant opens each listing, then the application form. Saved answers are filled in; anything it does not know is shown in the question card.
+3. The assistant opens each listing, then the application form. Internshala may open this as an application card on the listing page or as a full page; both are handled. Saved answers are filled in; anything it does not know is shown in the question card.
 4. Before anything is sent, a review card at the top right shows which required questions are answered and what still blocks submission: a missing required file, an unticked consent box, a CAPTCHA, or a validation error.
 5. Fix those yourself. When the card says the form is ready, press **Submit application**. That is the only moment the assistant clicks Internshala's submit button.
 6. After the site confirms, the listing is added to applied history and the next one starts after a short cooldown. **Skip**, **Stop**, **Resume**, and **Clear queue** are always available.
+
+If a listing already shows **Applied** (for example because you applied to it yourself outside the queue), the assistant records that and moves on instead of stalling on it.
 
 Auto-submit is not part of this release; the mode selector is fixed to **Review before submit**. The assistant also pauses on its own when something is unexpected (login, OTP, CAPTCHA, a missing Apply button, a form that will not load, or three problems in a row) and tells you what to check. Nothing is retried automatically.
 
@@ -171,6 +173,7 @@ Python is still a good choice if you later want something different, such as a s
 - Requires real user input for every mutating action; synthetic clicks from page scripts are ignored.
 - Keeps the apply queue and applied history in the same private storage, so progress survives page navigation and reopened tabs.
 - Paces the queue: one application at a time, one tab, 8–15 second cooldown, and a daily limit.
+- Handles both Internshala application flows: the full application page and the application card that opens on the listing page. The card is filled, reviewed, and submitted the same way, and an already-applied listing is detected and skipped.
 - Exports and imports the same filter data as JSON, merging presets by their cleaned URL.
 - Renders the UI inside a Shadow DOM so page styles cannot leak in.
 - Uses the URL as the source of truth for filters. No clicks on Internshala's filter controls, no fragile selectors.

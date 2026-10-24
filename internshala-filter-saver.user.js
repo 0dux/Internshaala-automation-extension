@@ -823,6 +823,9 @@
   let applySettings = normalizeApplySettings(null);
   let applyLoaded = false;
   let applyMessage = '';
+  // The real site often opens the application form in a card on the detail
+  // page instead of navigating. This tracks that surface.
+  let applyModalActive = false;
 
   let queueWriteChain = Promise.resolve();
 
@@ -942,8 +945,16 @@
     const path = location.pathname.toLowerCase();
     if (/\/(?:success|submitted|thank-you|thanks)(?:\/|$)/i.test(path)) return true;
 
-    return /\b(?:application (?:has been |was )?submitted|application sent|successfully applied|you have successfully applied|thank you for applying|your application has been received)\b/i
-      .test(pageTextSample());
+    const signal =
+      /\b(?:application (?:has been |was )?submitted|application sent|successfully applied|you have successfully applied|thank you for applying|your application has been received)\b/i;
+
+    if (signal.test(pageTextSample())) return true;
+
+    if (applyModalActive || queueState.submittingId) {
+      return signal.test(applicationSurfaceText());
+    }
+
+    return false;
   }
 
   function hasAlreadyAppliedState() {
@@ -1226,6 +1237,7 @@
   let detailStepTimer = 0;
   let detailActionItem = '';
   let detailActionAt = 0;
+  let detailActionLabel = '';
   let applicationStepItem = '';
   let applicationStepTimer = 0;
   let submitWatchTimer = 0;
@@ -1376,6 +1388,9 @@
 
     if (!saved) return;
 
+    // Let Resume retry the current listing instead of returning early.
+    detailStepItem = '';
+    detailActionItem = '';
     applyMessage = '';
     activeTab = 'apply';
     armApplyObserver();
@@ -1385,6 +1400,7 @@
   async function stopApplyQueue() {
     clearApplyTimers();
     stopApplyObserver();
+    applyModalActive = false;
     reviewDismissed = true;
     hideReviewCard();
 
@@ -1437,6 +1453,7 @@
   async function clearApplyQueue() {
     if (queueState.active) return;
 
+    applyModalActive = false;
     reviewDismissed = true;
     hideReviewCard();
 
@@ -1512,6 +1529,7 @@
 
     clearApplyTimers();
     stopApplyObserver();
+    applyModalActive = false;
     reviewDismissed = true;
     hideReviewCard();
 
@@ -1580,8 +1598,7 @@
     }
 
     if (isApplicationPage(location.href)) {
-      const applicationDetail = detailUrlForApplication(location.href);
-      if (applicationDetail && sameDetailUrl(applicationDetail, item.url)) {
+      if (isCurrentItemsApplicationPage(item)) {
         handleApplyPage();
         return;
       }
@@ -1599,7 +1616,84 @@
       return;
     }
 
+    applyModalActive = false;
     navigateToQueueItem(item);
+  }
+
+  const DETAIL_APPLY_TEXT =
+    /^(?:apply(?:\s+now)?|apply\s+for\s+this\s+(?:internship|job))\b/i;
+  const DETAIL_APPLY_HOOKS = [
+    '.apply_now_button',
+    '.apply_now_btn',
+    '#apply_button',
+    '#apply_now_button',
+    '[class*="apply"][class*="btn"]',
+    '[class*="apply"][class*="button"]'
+  ];
+  const DETAIL_APPLY_BLOCKLIST =
+    /withdraw|report|delete|logout|payment|upgrade|share|saved|filter|search|company\s+site|external|linkedin|naukri|indeed/i;
+
+  function applyControlText(node) {
+    return String(
+      node.textContent || node.value || node.getAttribute('aria-label') || ''
+    )
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function isDetailApplyLabel(text) {
+    return DETAIL_APPLY_TEXT.test(text) && !DETAIL_APPLY_BLOCKLIST.test(text);
+  }
+
+  const APPLICATION_DIALOG_SELECTOR =
+    '[role="dialog"], .modal, .modal-dialog, .popup, [class*="modal"], [class*="popup"], [class*="overlay"]';
+
+  /**
+   * The application card is a dialog that holds real fields. Ignore overlays
+   * without fields and login modals (a password field is not a candidate).
+   */
+  function applicationDialog() {
+    const dialogs = Array.from(
+      document.querySelectorAll(APPLICATION_DIALOG_SELECTOR)
+    );
+
+    for (const dialog of dialogs) {
+      if (dialog.closest('[data-internshala-saved-filters]')) continue;
+      if (!isVisible(dialog)) continue;
+
+      const fields = Array.from(
+        dialog.querySelectorAll('input, textarea, select')
+      ).filter(isCandidateField);
+
+      if (fields.length >= 2) return dialog;
+    }
+
+    return null;
+  }
+
+  function applicationSurfaceText() {
+    return Array.from(document.querySelectorAll(APPLICATION_DIALOG_SELECTOR))
+      .filter(isVisible)
+      .map((dialog) => String(dialog.innerText || ''))
+      .join(' ')
+      .slice(0, 4000);
+  }
+
+  function hasAppliedBadge() {
+    const scope =
+      document.querySelector('main, #main_content, .main_content, .container') ||
+      document.body;
+
+    if (!scope) return false;
+
+    return Array.from(
+      scope.querySelectorAll(
+        'button, [role="button"], [class*="applied"], [class*="status"]'
+      )
+    ).some((node) => {
+      if (!isVisible(node)) return false;
+      return /^applied(?:\s+on\b.*)?$/i.test(applyControlText(node));
+    });
   }
 
   function findDetailApplyControl() {
@@ -1610,41 +1704,125 @@
     if (!scope) return null;
 
     const nodes = [];
+    const add = (node) => {
+      if (node && !nodes.includes(node)) nodes.push(node);
+    };
 
-    ['.apply_now_button', '.apply_now_btn'].forEach((selector) => {
-      document.querySelectorAll(selector).forEach((node) => {
-        if (!nodes.includes(node)) nodes.push(node);
-      });
-    });
+    for (const selector of DETAIL_APPLY_HOOKS) {
+      scope.querySelectorAll(selector).forEach(add);
+    }
 
-    Array.from(
-      scope.querySelectorAll(
+    scope
+      .querySelectorAll(
         'a[href*="/student/interstitial/application/"], a[href*="/application/"]'
       )
-    ).forEach((node) => {
-      if (!nodes.includes(node)) nodes.push(node);
-    });
+      .forEach(add);
+
+    // Many pages use a plain <button> and the label is the only hook.
+    scope
+      .querySelectorAll(
+        'a, button, input[type="button"], input[type="submit"], [role="button"]'
+      )
+      .forEach((node) => {
+        if (isDetailApplyLabel(applyControlText(node))) add(node);
+      });
 
     for (const node of nodes) {
       if (node.closest('[data-internshala-saved-filters]')) continue;
+      if (node.closest('header, nav, footer')) continue;
       if (!isVisible(node)) continue;
       if (node.disabled || node.getAttribute('aria-disabled') === 'true') continue;
 
-      const text = String(node.textContent || node.value || '')
-        .replace(/\s+/g, ' ')
-        .trim();
-      const href = node.getAttribute('href') || '';
-
-      if (/withdraw|report|delete|logout|payment|upgrade|share|saved/i.test(text)) {
+      // Do not press an Apply button that belongs to a different listing.
+      if (
+        node.closest(
+          '[class*="similar"], [class*="recommend"], [class*="related"], [class*="other-jobs"]'
+        )
+      ) {
         continue;
       }
 
-      if (!/apply/i.test(text) && !/\/application\//i.test(href)) continue;
+      const owningDetailLink = node.closest(
+        'a[href*="/internship/detail/"], a[href*="/job/detail/"]'
+      );
+      if (owningDetailLink && owningDetailLink !== node) continue;
+
+      const text = applyControlText(node);
+      const href = node.getAttribute('href') || '';
+      const navigates = href && !/^(?:#|javascript:)/i.test(href);
+
+      if (!isDetailApplyLabel(text) && !/\/application\//i.test(href)) continue;
+      if (node.matches('a[href]') && navigates && !isInternshalaUrl(href)) continue;
 
       return node;
     }
 
     return null;
+  }
+
+  function enterModalApplication() {
+    applyModalActive = true;
+    applyMessage = '';
+    runApplicationStep();
+  }
+
+  function onLoginPage() {
+    if (isApplicationPage(location.href)) return false;
+
+    if (/\/(?:login|registration|signup|sign-in|signin)(?:\/|$)/i.test(location.pathname)) {
+      return true;
+    }
+
+    return hasVisiblePasswordField();
+  }
+
+  /**
+   * The Apply control is often a button that triggers a navigation or a modal.
+   * Watch what happened instead of assuming the page moved.
+   */
+  function followDetailApply(item) {
+    const startedAt = Date.now();
+
+    window.clearTimeout(detailStepTimer);
+    detailStepTimer = window.setTimeout(function check() {
+      detailStepTimer = 0;
+
+      if (!queueIsRunning()) return;
+
+      const current = currentQueueItem();
+      if (!current || current.id !== item.id) return;
+
+      if (isApplicationPage(location.href)) {
+        handleApplyPage();
+        return;
+      }
+
+      if (hasAlreadyAppliedState() || hasAppliedBadge()) {
+        markExistingApplication(item);
+        return;
+      }
+
+      if (onLoginPage()) {
+        pauseApplyQueue(
+          'Log in to Internshala in this tab, then press Resume to continue the queue.'
+        );
+        return;
+      }
+
+      if (applicationDialog()) {
+        enterModalApplication();
+        return;
+      }
+
+      if (Date.now() - startedAt > 12000) {
+        pauseApplyQueue(
+          '“' + detailActionLabel + '” did not open the application form. Open it yourself, then press Skip to continue the queue.'
+        );
+        return;
+      }
+
+      detailStepTimer = window.setTimeout(check, 1000);
+    }, 1000);
   }
 
   function runDetailStep() {
@@ -1653,7 +1831,7 @@
     const item = currentQueueItem();
     if (!item) return;
 
-    if (hasAlreadyAppliedState()) {
+    if (hasAlreadyAppliedState() || hasAppliedBadge()) {
       markExistingApplication(item);
       return;
     }
@@ -1678,6 +1856,7 @@
 
       detailActionItem = item.id;
       detailActionAt = Date.now();
+      detailActionLabel = applyControlText(control).slice(0, 40) || 'Apply';
       applyMessage = 'Opening the application form for “' + item.title + '”…';
       renderApply();
 
@@ -1705,12 +1884,7 @@
           return;
         }
 
-        window.setTimeout(() => {
-          if (!queueIsRunning()) return;
-          if (currentQueueItem() && currentQueueItem().id === item.id) {
-            handleApplyPage();
-          }
-        }, 2500);
+        followDetailApply(item);
       }, 700);
 
       return;
@@ -1729,7 +1903,7 @@
       const current = currentQueueItem();
       if (!current || current.id !== item.id) return;
 
-      if (findDetailApplyControl() || hasAlreadyAppliedState()) {
+      if (findDetailApplyControl() || hasAlreadyAppliedState() || hasAppliedBadge()) {
         handleApplyPage();
         return;
       }
@@ -1746,7 +1920,8 @@
     if (!groups.length) return null;
 
     const sourceForm = groups[groups.length - 1].fields[0].closest('form');
-    const scope = sourceForm || null;
+    const dialog = applyModalActive ? applicationDialog() : null;
+    const scope = dialog || sourceForm || null;
 
     // Without a real form container, a stray "Apply" link in the header could
     // be mistaken for the submit button. In that case the user marks it
@@ -1788,7 +1963,7 @@
     }
 
     if (queueState.submittingId === item.id) {
-      if (hasSubmissionSignal()) {
+      if (hasSubmissionSignal() || hasAppliedBadge()) {
         completeApplication(item);
         return;
       }
@@ -1924,7 +2099,7 @@
       if (!queueState.active) return;
       if (queueState.submittingId !== item.id) return;
 
-      if (hasSubmissionSignal()) {
+      if (hasSubmissionSignal() || hasAppliedBadge()) {
         completeApplication(item);
         return;
       }
@@ -2116,6 +2291,24 @@
     scheduleAdvance(3000);
   }
 
+  /**
+   * Job application slugs do not always end in -job, so the URL alone cannot
+   * always be matched to the queued listing. The referrer is the detail page
+   * the queue just left, which is a reliable second signal.
+   */
+  function isCurrentItemsApplicationPage(item) {
+    if (!item || !isApplicationPage(location.href)) return false;
+
+    const applicationDetail = detailUrlForApplication(location.href);
+    if (applicationDetail && sameDetailUrl(applicationDetail, item.url)) {
+      return true;
+    }
+
+    return Boolean(
+      document.referrer && sameDetailUrl(document.referrer, item.url)
+    );
+  }
+
   function handleApplyPage() {
     if (!applyLoaded || !queueIsRunning()) {
       renderApply();
@@ -2125,7 +2318,7 @@
     const item = currentQueueItem();
 
     if (queueState.submittingId) {
-      if (hasSubmissionSignal()) {
+      if (hasSubmissionSignal() || hasAppliedBadge()) {
         if (item) completeApplication(item);
         return;
       }
@@ -2148,12 +2341,22 @@
       return;
     }
 
-    if (isApplicationPage(location.href)) {
-      const applicationDetail = detailUrlForApplication(location.href);
-      if (applicationDetail && sameDetailUrl(applicationDetail, item.url)) {
+    if (applyModalActive) {
+      if (applicationDialog()) {
         runApplicationStep();
         return;
       }
+      applyModalActive = false;
+    }
+
+    if (applicationDialog()) {
+      enterModalApplication();
+      return;
+    }
+
+    if (isCurrentItemsApplicationPage(item)) {
+      runApplicationStep();
+      return;
     }
 
     if (sameDetailUrl(location.href, item.url)) {
@@ -4060,6 +4263,11 @@
    * use a real <form> element.
    */
   function applicationScope() {
+    if (applyModalActive) {
+      const dialog = applicationDialog();
+      if (dialog) return dialog;
+    }
+
     const forms = Array.from(document.querySelectorAll('form')).filter(
       (form) => !form.closest('[data-internshala-saved-filters]')
     );
@@ -4392,7 +4600,7 @@
    * fills empty fields, never overwrites user input.
    */
   function scanApplicationForm({ force = false } = {}) {
-    if (!applicationPage && !force) return null;
+    if (!applicationPage && !applyModalActive && !force) return null;
 
     const groups = collectFieldGroups();
     if (!groups.length) {
@@ -4831,7 +5039,7 @@
     }
 
     render();
-    if (applicationPage && queueState.active) renderReviewCard();
+    if ((applicationPage || applyModalActive) && queueState.active) renderReviewCard();
   }
 
   function closePanel() {
@@ -5710,7 +5918,7 @@
     if (!uiReady) return;
 
     const item = currentQueueItem();
-    if (!applicationPage || !queueIsRunning() || !item) {
+    if ((!applicationPage && !applyModalActive) || !queueIsRunning() || !item) {
       hideReviewCard();
       return;
     }
