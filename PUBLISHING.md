@@ -7,7 +7,7 @@ This folder is ready to upload as a Manifest V3 extension. The behavior is the s
 Upload the zip from `dist/`. Its root must contain `manifest.json`, `content.js`, `popup.html`, and `icons/`.
 
 ```
-dist/internshala-saved-filters-1.2.0.zip
+dist/internshala-saved-filters-1.3.0.zip
 ```
 
 Do **not** zip the whole project folder. If the zip contains a top-level `chrome-extension/` folder, the Chrome Web Store will reject it.

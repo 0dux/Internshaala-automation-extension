@@ -29,6 +29,8 @@ That also means a plain browser bookmark is enough for a no-install solution. Th
 - Works for both **internships** and **jobs**, and groups presets by section.
 - **Remembers application answers** (cover letters, availability, skills, and similar questions) and fills them into matching fields on later applications.
 - **Prompts for new questions** instead of guessing, with an Answers tab to search, edit, and delete saved answers.
+- **Queues listings into an assisted apply flow**: it opens each listing, fills the form from your saved answers, and shows a review card. It submits only after you press **Submit application**.
+- Tracks **applied history** so listings you already applied to are skipped next time, with a 20-per-24-hours cap and a cooldown between applications.
 - Stores everything **locally in your browser**. No account, no server, no network requests.
 - Has a small, isolated UI built with Shadow DOM, so Internshala's CSS does not affect it.
 - Starts with **no presets**. You add only the searches you actually use.
@@ -57,7 +59,7 @@ The extension requests only the `storage` permission, which keeps saved applicat
 npm.cmd run package
 ```
 
-The file is created at `dist/internshala-saved-filters-1.2.0.zip`. The zip has `manifest.json` at its root, ready for the Chrome Web Store.
+The file is created at `dist/internshala-saved-filters-1.3.0.zip`. The zip has `manifest.json` at its root, ready for the Chrome Web Store.
 
 See [`PUBLISHING.md`](PUBLISHING.md) for the full upload and review checklist.
 
@@ -117,7 +119,20 @@ The file is created and read locally. Nothing is uploaded. This is useful when c
 3. New questions appear in the card at the bottom right. Type your answer and choose **Save answer**, or **Skip** it for now.
 4. Open **Application answers** in the bottom-left to search, edit, or delete saved answers.
 
-Only exact question matches are filled. If a saved answer does not fit the field type or the available options, the assistant asks instead of guessing. File uploads, passwords, OTPs, CAPTCHAs, and consent checkboxes are never filled or stored. The assistant never clicks the final submit button.
+Only exact question matches are filled. If a saved answer does not fit the field type or the available options, the assistant asks instead of guessing. File uploads, passwords, OTPs, CAPTCHAs, and consent checkboxes are never filled or stored.
+
+### Queue applications
+
+1. Open a filtered internships or jobs search page.
+2. Click **Saved filters** → **Apply** → **Start queue**. The panel lists the cards on the page, drops listings already in your applied history, and asks you to confirm the queue.
+3. The assistant opens each listing, then the application form. Saved answers are filled in; anything it does not know is shown in the question card.
+4. Before anything is sent, a review card at the top right shows which required questions are answered and what still blocks submission: a missing required file, an unticked consent box, a CAPTCHA, or a validation error.
+5. Fix those yourself. When the card says the form is ready, press **Submit application**. That is the only moment the assistant clicks Internshala's submit button.
+6. After the site confirms, the listing is added to applied history and the next one starts after a short cooldown. **Skip**, **Stop**, **Resume**, and **Clear queue** are always available.
+
+Auto-submit is not part of this release; the mode selector is fixed to **Review before submit**. The assistant also pauses on its own when something is unexpected (login, OTP, CAPTCHA, a missing Apply button, a form that will not load, or three problems in a row) and tells you what to check. Nothing is retried automatically.
+
+If no real `<form>` contains the fields, or the submit button cannot be identified reliably, the assistant does not click blindly. It offers **Mark applied** instead, so you can submit on the site yourself and still keep the history accurate.
 
 ## No-install alternative
 
@@ -148,6 +163,8 @@ Python is still a good choice if you later want something different, such as a s
 - Stores presets and the last search in `localStorage` under the key `isf:v1`.
 - Reads application question labels and options, looks for an exact saved match, and fills text, select, radio, and checkbox fields through native events.
 - Stores saved answers separately (`chrome.storage.local` in the extension, `localStorage` in the userscript) so page scripts cannot read them.
+- Keeps the apply queue and applied history in the same private storage, so progress survives page navigation and reopened tabs.
+- Paces the queue: one application at a time, one tab, 8–15 second cooldown, and a daily limit.
 - Exports and imports the same filter data as JSON, merging presets by their cleaned URL.
 - Renders the UI inside a Shadow DOM so page styles cannot leak in.
 - Uses the URL as the source of truth for filters. No clicks on Internshala's filter controls, no fragile selectors.
@@ -157,12 +174,12 @@ The Chrome extension's content script is generated from the userscript, so both 
 ## Data and privacy
 
 - Saved searches and settings stay in `localStorage` on `internshala.com` under `isf:v1`.
-- Saved application answers stay in `chrome.storage.local` when the extension is used, and in `localStorage` under `isf:answers:v1` in the userscript.
+- Saved application answers stay in `chrome.storage.local` when the extension is used, and in `localStorage` under `isf:answers:v1` in the userscript. The apply queue, settings, and applied history use the same storage.
 - The extension makes no network requests. It reads application form labels and options only on Internshala application pages, so it can match and fill saved answers.
-- It does not read your account profile, applications, messages, resume files, or credentials, and it never submits a form.
+- It does not read your account profile, applications, messages, resume files, or credentials. It clicks Internshala's submit button only after you press **Submit application** in the review card, and it never ticks consent boxes or attaches files.
 - The toolbar popup is a static help card with a link to Internshala.
 - Clearing the site's cookies/site data removes saved searches; extension storage is removed by uninstalling the extension or clearing its data.
-- Saved searches and answers do not sync between browsers or devices. Use Export/Import to move searches.
+- Saved searches, answers, and queue progress do not sync between browsers or devices. Use Export/Import to move searches.
 
 The full policy is in [`store/privacy-policy.md`](store/privacy-policy.md).
 
@@ -172,7 +189,10 @@ The full policy is in [`store/privacy-policy.md`](store/privacy-policy.md).
 - Only `https://internshala.com` links are accepted; invalid or non-Internshala links are ignored.
 - Imports are capped at 2 MB / 500 presets to keep the panel responsive. Saving new searches is not capped.
 - Answers match only when the question text is the same (ignoring case, spacing, and required markers). Reworded questions are asked again.
-- The assistant never attaches files, solves CAPTCHAs, signs in, or submits an application for you.
+- The apply queue works on the listings of the current page. Pagination, retries, and auto-submit are not included yet.
+- The assistant never attaches files, solves CAPTCHAs, ticks consent boxes, or signs in for you. It pauses and waits for you in those cases.
+- If Internshala changes its application form markup, the assistant stops with a "layout changed" style message instead of clicking blindly.
+- Applied history records what the assistant saw. If you apply manually outside the queue, that listing is not known until it shows an "already applied" state or you press **Mark applied**.
 - If Internshala changes its URL scheme, older saved URLs may stop working.
 - Filters that are stored only in a cookie or in "As per my preferences" may not be represented in the URL, so they may not be captured.
 - This is an unofficial helper and is not affiliated with Internshala.
@@ -217,7 +237,7 @@ npm.cmd run package
 See [`PUBLISHING.md`](PUBLISHING.md). The short version:
 
 1. Test with **Load unpacked**.
-2. Upload `dist/internshala-saved-filters-1.2.0.zip` to the Chrome Web Store Developer Dashboard.
+2. Upload `dist/internshala-saved-filters-1.3.0.zip` to the Chrome Web Store Developer Dashboard.
 3. Use the copy in [`store/listing.md`](store/listing.md).
 4. Answer the privacy questions as "no data collected."
 5. Submit for review.
