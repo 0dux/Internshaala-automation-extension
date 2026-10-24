@@ -14,8 +14,17 @@
 (function () {
   'use strict';
 
-  // Avoid a second panel when both the extension and the userscript are active.
-  if (document.querySelector('[data-internshala-saved-filters]')) return;
+  // Avoid a second panel when both the extension and the userscript are
+  // active. The flag is set synchronously because boot() appends the host only
+  // after awaiting storage.
+  const OWNER_ATTR = 'data-internshala-saved-filters-owner';
+  if (
+    document.documentElement.hasAttribute(OWNER_ATTR) ||
+    document.querySelector('[data-internshala-saved-filters]')
+  ) {
+    return;
+  }
+  document.documentElement.setAttribute(OWNER_ATTR, '');
 
   /* ------------------------------------------------------------------ *
    * Config
@@ -98,10 +107,40 @@
           if (entry && typeof entry.url === 'string' && sectionFor(entry.url) === section) {
             last[section] = {
               url: entry.url,
-              name: typeof entry.name === 'string' ? entry.name : 'Last search',
+              name: typeof entry.name === 'string'
+                ? entry.name.slice(0, 60)
+                : 'Last search',
               savedAt: Number(entry.savedAt) || Date.now()
             };
           }
+        }
+      }
+
+      // Treat stored filters as untrusted: page scripts share this
+      // localStorage, so cap the count, text lengths, and duplicates before
+      // anything reaches the panel.
+      const presets = [];
+      const seenPresetUrls = new Set();
+
+      if (Array.isArray(saved.presets)) {
+        for (const preset of saved.presets) {
+          if (presets.length >= MAX_PRESETS) break;
+          if (!isPreset(preset)) continue;
+
+          const urlKey = preset.url.replace(/\/+$/, '');
+          if (seenPresetUrls.has(urlKey)) continue;
+          seenPresetUrls.add(urlKey);
+
+          presets.push({
+            id: preset.id.slice(0, 120),
+            name:
+              preset.name.trim().slice(0, 60) ||
+              deriveName(preset.section, preset.url),
+            url: preset.url,
+            section: preset.section,
+            createdAt: Number(preset.createdAt) || Date.now(),
+            updatedAt: Number(preset.updatedAt) || Date.now()
+          });
         }
       }
 
@@ -109,7 +148,7 @@
         version: 1,
         autoRestore: saved.autoRestore === true,
         last,
-        presets: Array.isArray(saved.presets) ? saved.presets.filter(isPreset) : []
+        presets
       };
     } catch (error) {
       console.warn('[Saved filters] Could not read local data:', error);
@@ -124,6 +163,7 @@
 
     return Boolean(
       typeof preset.id === 'string' &&
+      preset.id.length > 0 &&
       typeof preset.name === 'string' &&
       typeof preset.url === 'string' &&
       typeof section === 'string' &&
@@ -188,6 +228,11 @@
 
   const usesExtensionStorage = extensionStorage !== null;
 
+  // A failed read leaves empty state in memory. Writing that back would erase
+  // real data, so remember which keys failed and refuse destructive writes
+  // until a read or write succeeds again.
+  const storageReadFailures = new Set();
+
   function chromeStorageCall(method, payload) {
     return new Promise((resolve, reject) => {
       try {
@@ -209,11 +254,13 @@
     if (extensionStorage) {
       try {
         const result = await chromeStorageCall(extensionStorage.get, [key]);
+        storageReadFailures.delete(key);
         if (result && Object.prototype.hasOwnProperty.call(result, key)) {
           return result[key];
         }
         return fallback;
       } catch (error) {
+        storageReadFailures.add(key);
         console.warn('[Saved filters] Could not read extension storage:', error);
         return fallback;
       }
@@ -221,8 +268,11 @@
 
     try {
       const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
+      const value = raw ? JSON.parse(raw) : fallback;
+      storageReadFailures.delete(key);
+      return value;
     } catch (error) {
+      storageReadFailures.add(key);
       console.warn('[Saved filters] Could not read local data:', error);
       return fallback;
     }
@@ -232,6 +282,7 @@
     if (extensionStorage) {
       try {
         await chromeStorageCall(extensionStorage.set, { [key]: value });
+        storageReadFailures.delete(key);
         return true;
       } catch (error) {
         console.warn('[Saved filters] Could not save extension data:', error);
@@ -241,6 +292,7 @@
 
     try {
       localStorage.setItem(key, JSON.stringify(value));
+      storageReadFailures.delete(key);
       return true;
     } catch (error) {
       console.warn('[Saved filters] Could not save local data:', error);
@@ -569,6 +621,7 @@
   let answersState = { version: 1, answers: [] };
   let answersLoaded = false;
   let answersPersistTimer = 0;
+  let answersWrittenAt = 0;
 
   async function loadAnswers() {
     const raw = await storageGet(ANSWERS_KEY, null);
@@ -585,6 +638,13 @@
   }
 
   async function persistAnswers(nextState, { silent = false } = {}) {
+    if (storageReadFailures.has(ANSWERS_KEY)) {
+      if (uiReady && !silent) {
+        toast('Saved answers could not be read. Reload the page before changing them.');
+      }
+      return false;
+    }
+
     const ok = await storageSet(ANSWERS_KEY, nextState);
     if (!ok) {
       if (uiReady && !silent) toast('Could not save answer: browser storage is full');
@@ -593,6 +653,7 @@
 
     answersState = nextState;
     answersLoaded = true;
+    answersWrittenAt = Date.now();
     if (uiReady && !silent) render();
     return true;
   }
@@ -779,6 +840,13 @@
   }
 
   async function persistApplied(nextState) {
+    if (storageReadFailures.has(APPLIED_KEY)) {
+      if (uiReady) {
+        toast('Applied history could not be read. Reload the page before changing it.');
+      }
+      return false;
+    }
+
     const ok = await storageSet(APPLIED_KEY, nextState);
     if (!ok) {
       if (uiReady) toast('Could not save applied history');
@@ -844,17 +912,30 @@
     return queueState.items.map(updater);
   }
 
+  // innerText forces layout, and one readiness check can ask for the page text
+  // several times. Cache it briefly so a scan cycle reads the page once.
+  let pageTextCache = { href: '', at: 0, text: '' };
+
   function pageTextSample(limit = 8000) {
+    const now = Date.now();
+
+    if (pageTextCache.href === location.href && now - pageTextCache.at < 750) {
+      return pageTextCache.text.slice(0, limit);
+    }
+
     const node =
       document.querySelector('main, #main_content, .main_content, .container') ||
       document.body;
 
-    if (!node) return '';
+    const text = node
+      ? String(node.innerText || node.textContent || '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 8000)
+      : '';
 
-    return String(node.innerText || node.textContent || '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, limit);
+    pageTextCache = { href: location.href, at: now, text };
+    return text.slice(0, limit);
   }
 
   function hasSubmissionSignal() {
@@ -940,8 +1021,8 @@
     return Array.isArray(value) ? value.length === 0 : !String(value || '').trim();
   }
 
-  function applicationReadiness() {
-    const groups = collectFieldGroups();
+  function applicationReadiness(knownGroups = null) {
+    const groups = knownGroups || collectFieldGroups();
     const required = groups.filter((group) => group.required);
     const unanswered = required.filter(isEmptyGroupValue);
     const blockers = [];
@@ -971,7 +1052,8 @@
       blockers.push('Complete the CAPTCHA yourself.');
     }
 
-    if (missingRequiredFile()) {
+    const fileMissing = missingRequiredFile();
+    if (fileMissing) {
       blockers.push('Attach the required file yourself.');
     }
 
@@ -989,7 +1071,7 @@
       blockers.push('The page is asking for a login, OTP, CAPTCHA, or a pause.');
     }
 
-    if (hasOptionalFileInput() && !missingRequiredFile()) {
+    if (!fileMissing && hasOptionalFileInput()) {
       warnings.push('Attach any optional files yourself before submitting.');
     }
 
@@ -1149,8 +1231,8 @@
   let submitWatchTimer = 0;
   let reviewDismissed = false;
   let reviewItemId = '';
+  let reviewSignature = '';
   let showManualMark = false;
-  let lastReadiness = null;
 
   function clearApplyTimers() {
     window.clearTimeout(applyAdvanceTimer);
@@ -1179,6 +1261,11 @@
   async function startApplyQueue() {
     if (!listSection) {
       return resumeApplyQueue();
+    }
+
+    if (storageReadFailures.has(QUEUE_KEY)) {
+      toast('The saved apply queue could not be read. Reload the page and try again.');
+      return;
     }
 
     const listings = scanListingItems();
@@ -1245,7 +1332,9 @@
     const items = listingsToQueue(listings, { merge: true });
     const added = items.length - queueState.items.length;
 
-    await persistQueue({ ...queueState, items });
+    const saved = await persistQueue({ ...queueState, items });
+    if (!saved) return;
+
     toast(
       added > 0
         ? 'Added ' + added + ' listing' + (added === 1 ? '' : 's') + ' to the queue'
@@ -1254,6 +1343,11 @@
   }
 
   async function resumeApplyQueue() {
+    if (storageReadFailures.has(QUEUE_KEY)) {
+      toast('The saved apply queue could not be read. Reload the page and try again.');
+      return;
+    }
+
     const pending = pendingQueueItems();
     if (!pending.length && !queueState.paused) {
       toast('There are no pending applications in the queue');
@@ -1284,12 +1378,13 @@
 
     applyMessage = '';
     activeTab = 'apply';
+    armApplyObserver();
     handleApplyPage();
   }
 
   async function stopApplyQueue() {
-    window.clearTimeout(applyAdvanceTimer);
-    applyAdvanceTimer = 0;
+    clearApplyTimers();
+    stopApplyObserver();
     reviewDismissed = true;
     hideReviewCard();
 
@@ -1366,6 +1461,7 @@
 
   async function pauseApplyQueue(reason, { markFailed = false } = {}) {
     clearApplyTimers();
+    stopApplyObserver();
 
     let items = queueState.items;
     let failures = queueState.consecutiveFailures;
@@ -1414,6 +1510,8 @@
   async function finishApplyQueue() {
     const done = queueState.items.filter((item) => item.status === 'done').length;
 
+    clearApplyTimers();
+    stopApplyObserver();
     reviewDismissed = true;
     hideReviewCard();
 
@@ -1725,9 +1823,8 @@
       }
     }
 
-    scanApplicationForm();
-
-    const groups = collectFieldGroups();
+    const scan = scanApplicationForm();
+    const groups = (scan && scan.groupList) || collectFieldGroups();
     if (!groups.length) {
       if (applicationStepItem !== item.id) {
         applicationStepItem = item.id;
@@ -1764,7 +1861,7 @@
 
     applicationStepItem = item.id;
     applyMessage = 'Review the filled application, then submit it yourself.';
-    renderReviewCard();
+    renderReviewCard(applicationReadiness(groups));
     renderApply();
   }
 
@@ -1774,7 +1871,6 @@
     if (queueState.submittingId === item.id) return;
 
     const readiness = applicationReadiness();
-    lastReadiness = readiness;
 
     if (!readiness.ready) {
       renderReviewCard(readiness);
@@ -1799,6 +1895,8 @@
     });
 
     if (!saved) return;
+
+    renderReviewCard(applicationReadiness());
 
     if (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       try {
@@ -2088,20 +2186,43 @@
       renderApply();
     }
 
-    if (!detailSection && !applicationPage) return;
+    armApplyObserver();
+  }
+
+  function stopApplyObserver() {
     if (applyObserver) applyObserver.disconnect();
+    applyObserver = null;
+  }
+
+  function armApplyObserver() {
+    if (!detailSection && !applicationPage) return;
+
+    stopApplyObserver();
+
+    let lastRunAt = 0;
+
+    const run = () => {
+      applyScanTimer = 0;
+      lastRunAt = Date.now();
+
+      try {
+        if (!queueIsRunning()) return;
+        handleApplyPage();
+      } catch (error) {
+        console.warn('[Saved filters] Could not continue the apply queue:', error);
+      }
+    };
 
     applyObserver = new MutationObserver(() => {
+      // A page that mutates continuously must not postpone the scan forever.
+      if (applyScanTimer && Date.now() - lastRunAt > 2500) {
+        window.clearTimeout(applyScanTimer);
+        run();
+        return;
+      }
+
       window.clearTimeout(applyScanTimer);
-      applyScanTimer = window.setTimeout(() => {
-        try {
-          if (!queueIsRunning()) return;
-          if (applicationPage) renderReviewCard();
-          handleApplyPage();
-        } catch (error) {
-          console.warn('[Saved filters] Could not continue the apply queue:', error);
-        }
-      }, 900);
+      applyScanTimer = window.setTimeout(run, 900);
     });
 
     applyObserver.observe(document.body, { childList: true, subtree: true });
@@ -4278,7 +4399,7 @@
       pendingQuestions = [];
       qcardSignature = '';
       renderQuestionCard();
-      return { filled: 0, matched: 0, groups: 0, pending: 0, blockers: [] };
+      return { filled: 0, matched: 0, groups: 0, groupList: [], pending: 0, blockers: [] };
     }
 
     const passwordFields = Array.from(
@@ -4299,7 +4420,7 @@
       pendingQuestions = [];
       qcardSignature = '';
       renderQuestionCard();
-      return { filled: 0, matched: 0, groups: 0, pending: 0, blockers: ['login'] };
+      return { filled: 0, matched: 0, groups: 0, groupList: [], pending: 0, blockers: ['login'] };
     }
 
     const signature = groups
@@ -4395,6 +4516,7 @@
       filled,
       matched,
       groups: groups.length,
+      groupList: groups,
       pending: pending.length,
       blockers
     };
@@ -4653,15 +4775,29 @@
 
     if (answerObserver) answerObserver.disconnect();
 
+    let lastScanAt = 0;
+
+    const run = () => {
+      formScanTimer = 0;
+      lastScanAt = Date.now();
+
+      try {
+        scanApplicationForm();
+      } catch (error) {
+        console.warn('[Saved filters] Could not scan application form:', error);
+      }
+    };
+
     const schedule = () => {
+      // A page that mutates continuously must not starve the scan.
+      if (formScanTimer && Date.now() - lastScanAt > 2000) {
+        window.clearTimeout(formScanTimer);
+        run();
+        return;
+      }
+
       window.clearTimeout(formScanTimer);
-      formScanTimer = window.setTimeout(() => {
-        try {
-          scanApplicationForm();
-        } catch (error) {
-          console.warn('[Saved filters] Could not scan application form:', error);
-        }
-      }, 650);
+      formScanTimer = window.setTimeout(run, 650);
     };
 
     answerObserver = new MutationObserver(schedule);
@@ -4935,7 +5071,9 @@
         }
 
         let id =
-          typeof preset.id === 'string' && preset.id ? preset.id : uid();
+          typeof preset.id === 'string' && preset.id
+            ? preset.id.slice(0, 120)
+            : uid();
         if (usedIds.has(id)) id = uid();
 
         const name =
@@ -5272,6 +5410,14 @@
       count + ' saved answer' + (count === 1 ? '' : 's');
     el.clearAnswers.disabled = count === 0;
 
+    // The shadow root is open, so page scripts can read it. Keep saved answers
+    // out of the DOM unless the user is actually looking at them.
+    if (!panelOpen || activeTab !== 'answers') {
+      el.answerList.replaceChildren();
+      el.answerEmpty.hidden = true;
+      return;
+    }
+
     const query = el.answerSearch.value;
     const filtered = answersState.answers.filter((entry) => answerMatches(entry, query));
 
@@ -5557,6 +5703,7 @@
     if (!uiReady) return;
     el.review.hidden = true;
     el.review.classList.remove('is-busy');
+    reviewSignature = '';
   }
 
   function renderReviewCard(readiness = null) {
@@ -5580,9 +5727,24 @@
     }
 
     const state = readiness || applicationReadiness();
-    lastReadiness = state;
 
     const submitting = queueState.submittingId === item.id;
+
+    // Page mutations retrigger this often; skip the DOM rebuild when nothing
+    // the card shows has changed.
+    const signature = [
+      item.id,
+      submitting ? '1' : '0',
+      state.ready ? '1' : '0',
+      String(state.required),
+      String(state.answered),
+      String(state.pending),
+      state.blockers.join('|'),
+      state.warnings.join('|')
+    ].join('\u0000');
+
+    if (signature === reviewSignature && !el.review.hidden) return;
+    reviewSignature = signature;
 
     el.reviewTitle.textContent = submitting
       ? 'Submitting application…'
@@ -5764,26 +5926,31 @@
   el.tabApply.addEventListener('click', () => switchTab('apply'));
   el.tabAnswers.addEventListener('click', () => switchTab('answers'));
 
-  el.applyStart.addEventListener('click', () => {
+  el.applyStart.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
     startApplyQueue().catch((error) => {
       console.warn('[Saved filters] Could not start the apply queue:', error);
       toast('Could not start the apply queue');
     });
   });
 
-  el.applyRescan.addEventListener('click', () => {
+  el.applyRescan.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
     rescanApplyQueue().catch(() => toast('Could not rescan this page'));
   });
 
-  el.applyResume.addEventListener('click', () => {
+  el.applyResume.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
     resumeApplyQueue().catch(() => toast('Could not resume the apply queue'));
   });
 
-  el.applyStop.addEventListener('click', () => {
+  el.applyStop.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
     stopApplyQueue().catch(() => toast('Could not stop the apply queue'));
   });
 
-  el.applySkip.addEventListener('click', () => {
+  el.applySkip.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
     skipCurrentApplication().catch(() => toast('Could not skip this application'));
   });
 
@@ -5792,13 +5959,15 @@
     renderReviewCard();
   });
 
-  el.applyClear.addEventListener('click', () => {
+  el.applyClear.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
     if (!queueState.items.length) return;
     if (!window.confirm('Clear the saved apply queue? Applied history is kept.')) return;
     clearApplyQueue().catch(() => toast('Could not clear the apply queue'));
   });
 
-  el.applyHistory.addEventListener('click', () => {
+  el.applyHistory.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
     if (!appliedState.entries.length) return;
     if (
       !window.confirm(
@@ -5826,7 +5995,8 @@
     }).catch(() => {});
   });
 
-  el.resume.addEventListener('click', () => {
+  el.resume.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
     const last = listSection ? state.last[listSection] : null;
     if (last) openUrl(last.url);
   });
@@ -5867,6 +6037,7 @@
   });
 
   el.groups.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
     const renameButton = event.target.closest('[data-rename]');
     if (renameButton) {
       renamePreset(
@@ -5889,8 +6060,15 @@
     }
   });
 
-  el.exportData.addEventListener('click', exportBackup);
-  el.importData.addEventListener('click', () => el.importFile.click());
+  el.exportData.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
+    exportBackup();
+  });
+
+  el.importData.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
+    el.importFile.click();
+  });
 
   el.importFile.addEventListener('change', () => {
     const file = el.importFile.files && el.importFile.files[0];
@@ -5898,9 +6076,15 @@
     el.importFile.value = '';
   });
 
-  el.answerSearch.addEventListener('input', renderAnswers);
+  let answerSearchTimer = 0;
 
-  el.clearAnswers.addEventListener('click', async () => {
+  el.answerSearch.addEventListener('input', () => {
+    window.clearTimeout(answerSearchTimer);
+    answerSearchTimer = window.setTimeout(renderAnswers, 150);
+  });
+
+  el.clearAnswers.addEventListener('click', async (event) => {
+    if (!event.isTrusted) return;
     if (!answersState.answers.length) return;
     if (!window.confirm('Delete all saved application answers?')) return;
 
@@ -5938,18 +6122,23 @@
     toast('Rechecked the form');
   });
 
-  el.reviewSubmit.addEventListener('click', () => {
+  el.reviewSubmit.addEventListener('click', (event) => {
+    // A page script can reach the open shadow root and call click(); only a
+    // real press may submit an application.
+    if (!event.isTrusted) return;
     submitCurrentApplication().catch((error) => {
       console.warn('[Saved filters] Could not submit the application:', error);
       toast('Could not submit the application');
     });
   });
 
-  el.reviewSkip.addEventListener('click', () => {
+  el.reviewSkip.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
     skipCurrentApplication().catch(() => toast('Could not skip this application'));
   });
 
-  el.reviewMark.addEventListener('click', () => {
+  el.reviewMark.addEventListener('click', (event) => {
+    if (!event.isTrusted) return;
     const item = currentQueueItem();
     if (!item) return;
     if (
@@ -6043,6 +6232,8 @@
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
       if (Object.prototype.hasOwnProperty.call(changes, ANSWERS_KEY)) {
+        // Our own save already updated memory; skip the extra read and render.
+        if (Date.now() - answersWrittenAt < 500) return;
         loadAnswers();
       }
     });
