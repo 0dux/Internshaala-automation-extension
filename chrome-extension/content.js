@@ -950,11 +950,6 @@
     return false;
   }
 
-  function hasAlreadyAppliedState() {
-    return /\b(?:already applied|application already submitted|you have already applied)\b/i
-      .test(pageTextSample());
-  }
-
   function hasSecurityBlocker() {
     return /\b(?:captcha|enter otp|verify otp|one[-\s]?time password|log in to continue|sign in to continue|session expired|too many requests|rate limit)\b/i
       .test(pageTextSample());
@@ -1616,12 +1611,16 @@
   const DETAIL_APPLY_TEXT =
     /^(?:apply(?:\s+now)?|apply\s+for\s+this\s+(?:internship|job))\b/i;
   const DETAIL_APPLY_HOOKS = [
-    '.apply_now_button',
+    '#easy_apply_button',
+    '#top_easy_apply_button',
+    '#mobile_easy_apply_button',
+    '[id*="easy_apply_button"]',
     '.apply_now_btn',
+    '[class*="apply_now_btn"]',
+    '.apply_now_button',
     '#apply_button',
     '#apply_now_button',
-    '[class*="apply"][class*="btn"]',
-    '[class*="apply"][class*="button"]'
+    '[class*="apply"][class*="btn"]'
   ];
   const DETAIL_APPLY_BLOCKLIST =
     /withdraw|report|delete|logout|payment|upgrade|share|saved|filter|search|company\s+site|external|linkedin|naukri|indeed/i;
@@ -1639,11 +1638,11 @@
   }
 
   const APPLICATION_DIALOG_SELECTOR =
-    '[role="dialog"], .modal, .modal-dialog, .popup, [class*="modal"], [class*="popup"], [class*="overlay"]';
+    '#easy_apply_modal, [role="dialog"], .modal, .modal-dialog, .popup, [class*="modal"], [class*="popup"], [class*="overlay"]';
 
   /**
-   * The application card is a dialog that holds real fields. Ignore overlays
-   * without fields and login modals (a password field is not a candidate).
+   * The application card is the easy-apply dialog. Bootstrap hides it with
+   * display:none; once opened it holds the real form fields.
    */
   function applicationDialog() {
     const dialogs = Array.from(
@@ -1661,6 +1660,15 @@
       if (fields.length >= 2) return dialog;
     }
 
+    const inline = document.querySelector('#application-form-container');
+    if (inline && isVisible(inline) && !inline.closest('[data-internshala-saved-filters]')) {
+      const fields = Array.from(
+        inline.querySelectorAll('input, textarea, select')
+      ).filter(isCandidateField);
+
+      if (fields.length >= 2) return inline;
+    }
+
     return null;
   }
 
@@ -1672,21 +1680,44 @@
       .slice(0, 4000);
   }
 
+  const APPLY_CONTROL_SELECTOR =
+    '#easy_apply_button, #top_easy_apply_button, #mobile_easy_apply_button, ' +
+    '[id*="easy_apply_button"], .apply_now_btn, [class*="apply_now_btn"]';
+
+  /**
+   * "Already applied" is marked on the apply control itself (a disabled
+   * button labelled "Already applied"). Do not scan the whole page: listing
+   * pages also say "150+ candidates have already applied", which is not the
+   * user's own application.
+   */
   function hasAppliedBadge() {
-    const scope =
-      document.querySelector('main, #main_content, .main_content, .container') ||
-      document.body;
+    const controls = Array.from(
+      document.querySelectorAll(APPLY_CONTROL_SELECTOR)
+    );
 
-    if (!scope) return false;
+    for (const node of controls) {
+      if (node.closest('[data-internshala-saved-filters]')) continue;
+      if (
+        node.closest(
+          '[class*="similar"], [class*="recommend"], [class*="related"]'
+        )
+      ) {
+        continue;
+      }
+      if (!isVisible(node)) continue;
 
-    return Array.from(
-      scope.querySelectorAll(
-        'button, [role="button"], [class*="applied"], [class*="status"]'
-      )
-    ).some((node) => {
-      if (!isVisible(node)) return false;
-      return /^applied(?:\s+on\b.*)?$/i.test(applyControlText(node));
-    });
+      const text = applyControlText(node);
+      if (/^(?:already\s+)?applied\b/i.test(text)) return true;
+    }
+
+    const container = document.querySelector('.buttons_container');
+    if (container && isVisible(container)) {
+      return /^(?:already\s+)?applied\b/i.test(
+        cleanQuestionText(container.textContent || '')
+      );
+    }
+
+    return false;
   }
 
   function findDetailApplyControl() {
@@ -1790,7 +1821,7 @@
         return;
       }
 
-      if (hasAlreadyAppliedState() || hasAppliedBadge()) {
+      if (hasAppliedBadge()) {
         markExistingApplication(item);
         return;
       }
@@ -1824,7 +1855,7 @@
     const item = currentQueueItem();
     if (!item) return;
 
-    if (hasAlreadyAppliedState() || hasAppliedBadge()) {
+    if (hasAppliedBadge()) {
       markExistingApplication(item);
       return;
     }
@@ -1896,7 +1927,7 @@
       const current = currentQueueItem();
       if (!current || current.id !== item.id) return;
 
-      if (findDetailApplyControl() || hasAlreadyAppliedState() || hasAppliedBadge()) {
+      if (findDetailApplyControl() || hasAppliedBadge()) {
         handleApplyPage();
         return;
       }
