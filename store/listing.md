@@ -6,7 +6,7 @@ Internshala Saved Filters
 
 ## Short description (132 characters max)
 
-Save, rename, and restore Internshala internship and job search filters in one click. Local-only and unofficial.
+Save Internshala searches and reuse answers to repeat application questions. Local-only, no tracking, unofficial.
 
 ## Detailed description
 
@@ -29,6 +29,9 @@ FEATURES
 - Shows a "Resume last search" button on the unfiltered page.
 - Optional auto-open of your last search, once per new tab.
 - Export and import presets as a JSON backup.
+- Remembers answers to repeat application questions and fills them into matching fields.
+- Prompts for new questions instead of guessing, with an Answers tab to search, edit, and delete saved answers.
+- Never fills passwords, OTPs, CAPTCHAs, file uploads, or consent boxes, and never submits an application.
 - Responsive panel that stays clear of the site's bottom bar.
 - Uses the page URL, so it keeps working when Internshala changes its filter UI.
 
@@ -38,7 +41,7 @@ The extension starts empty. Add your own filters once, save the search, and it w
 
 PRIVACY
 
-No account, no tracking, no network requests. Presets stay in localStorage on internshala.com. Export creates a file on your device.
+No account, no tracking, no network requests. Searches stay in localStorage on internshala.com. Saved answers stay in the extension's local storage (or localStorage in the userscript). Export creates a file on your device.
 
 NOTES
 
@@ -76,15 +79,15 @@ Replace with your support email before publishing:
 
 ## Single purpose
 
-Save and restore Internshala internship and job search filters.
+Save and restore Internshala internship and job searches, and reuse answers to repeat application questions.
 
 ## Permission justification
 
-The extension requests no `permissions` and no `host_permissions`.
+The extension requests only the `storage` permission, used to keep saved application answers in `chrome.storage.local` instead of the page's `localStorage`.
 
-It declares a content script for `https://internshala.com/*` and `https://www.internshala.com/*` so it can show the Saved filters panel on Internshala search pages. The content script reads the current page URL and stores presets in the page's `localStorage`. It does not read page content, credentials, messages, or applications, and it makes no network requests.
+It declares a content script for `https://internshala.com/*` and `https://www.internshala.com/*` so it can show the panel on Internshala search pages and fill saved answers on application pages. It reads the current page URL, application question labels, field types, and available options. It stores data locally and makes no network requests. It does not read account credentials, messages, resume files, or profile data, and it never submits an application.
 
-Why the host warning appears: Chrome shows "Read and change your data on internshala.com" for any content script that runs on that site. This extension only adds its own panel and stores data locally.
+Why the host warning appears: Chrome shows "Read and change your data on internshala.com" for any content script that runs on that site. This extension only adds its own panel, reads the application form, and stores data locally.
 
 ## Privacy practices answers
 
@@ -100,5 +103,6 @@ Why the host warning appears: Chrome shows "Read and change your data on interns
 
 - This is an unofficial helper. The name and description say so.
 - No remote code, no network requests, no analytics.
-- To test: open `https://internshala.com/internships/`, apply any filter, click "Saved filters" in the bottom-left, and save the search. The preset can then be reopened from the panel.
+- To test filters: open `https://internshala.com/internships/`, apply any filter, click "Saved filters" in the bottom-left, and save the search. The preset can then be reopened from the panel.
+- To test answers: open any internship application form, answer a question in the "Application questions" card, and save it. The answer is filled automatically the next time the same question appears. The extension does not submit the form.
 - The extension starts with no presets by design.

@@ -7,7 +7,7 @@ This folder is ready to upload as a Manifest V3 extension. The behavior is the s
 Upload the zip from `dist/`. Its root must contain `manifest.json`, `content.js`, `popup.html`, and `icons/`.
 
 ```
-dist/internshala-saved-filters-1.1.1.zip
+dist/internshala-saved-filters-1.2.0.zip
 ```
 
 Do **not** zip the whole project folder. If the zip contains a top-level `chrome-extension/` folder, the Chrome Web Store will reject it.
@@ -20,7 +20,8 @@ Do **not** zip the whole project folder. If the zip contains a top-level `chrome
 4. Open `https://internshala.com/internships/`.
 5. Apply a filter, click **Saved filters** in the bottom-left, and save the search.
 6. Reload the page and confirm the preset is still there.
-7. Click the extension's toolbar icon and check that the popup opens.
+7. Open an application form and answer a new question in the "Application questions" card. Reload and confirm the answer is filled automatically. Do not submit a real application during testing.
+8. Click the extension's toolbar icon and check that the popup opens.
 
 No presets are included on purpose. The extension starts empty.
 
@@ -42,12 +43,13 @@ You need a Chrome Web Store developer account. Google charges a one-time registr
 
 In the **Privacy practices** tab:
 
-- Single purpose: "Save and restore Internshala internship and job search filters."
-- Explain that the content script adds the saved-filters panel on Internshala and reads only the current URL.
-- Answer **No** to collecting user data, selling data, using remote code, and using authentication/cookies.
-- A privacy policy URL is normally optional when no data is collected. If the dashboard asks for one, publish [`privacy-policy.md`](privacy-policy.md) somewhere public (GitHub Pages, for example) and paste the URL.
+- Single purpose: "Save and restore Internshala internship and job searches, and reuse answers to repeat application questions."
+- Explain that the content script adds the panel on Internshala, reads the current URL, and reads application form labels and options to fill saved answers.
+- Explain that the `storage` permission keeps saved answers in the extension's local storage.
+- Answer **No** to selling data, using remote code, and using authentication/cookies. Data is stored locally and never transmitted, so the extension does not collect user data.
+- A privacy policy URL is optional when no data is collected. If the dashboard asks for one, publish [`privacy-policy.md`](privacy-policy.md) somewhere public (GitHub Pages, for example) and paste the URL.
 
-The extension requests no `permissions` and no `host_permissions`. Chrome will still show a host warning because the content script runs on `internshala.com`; that is expected.
+The extension requests only the `storage` permission and no `host_permissions`. Chrome will still show a host warning because the content script runs on `internshala.com`; that is expected.
 
 ## 4. Distribution and review
 

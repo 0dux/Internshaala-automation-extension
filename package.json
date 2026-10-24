@@ -1,9 +1,9 @@
 {
   "name": "internshala-saved-filters",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "Chrome extension + Tampermonkey userscript for saving Internshala search filters.",
+  "description": "Chrome extension + Tampermonkey userscript for saving Internshala searches and reusing application answers.",
   "scripts": {
     "build": "node scripts/build-extension.mjs",
     "assets": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-assets.ps1",

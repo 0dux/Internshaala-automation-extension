@@ -1,6 +1,6 @@
 # Internshala Saved Filters
 
-A Chrome extension (and optional Tampermonkey userscript) that remembers your Internshala search filters and restores them in one click.
+A Chrome extension (and optional Tampermonkey userscript) that remembers your Internshala search filters, restores them in one click, and reuses your answers to repeat application questions.
 
 ![Saved filters panel](preview.png)
 
@@ -27,6 +27,8 @@ That also means a plain browser bookmark is enough for a no-install solution. Th
 - Shows a **"Resume last search"** button when you land on the unfiltered internships/jobs page.
 - Optional **auto-open last search** in a new tab.
 - Works for both **internships** and **jobs**, and groups presets by section.
+- **Remembers application answers** (cover letters, availability, skills, and similar questions) and fills them into matching fields on later applications.
+- **Prompts for new questions** instead of guessing, with an Answers tab to search, edit, and delete saved answers.
 - Stores everything **locally in your browser**. No account, no server, no network requests.
 - Has a small, isolated UI built with Shadow DOM, so Internshala's CSS does not affect it.
 - Starts with **no presets**. You add only the searches you actually use.
@@ -47,7 +49,7 @@ After the extension is approved, the store link will go here:
 4. Click **Load unpacked** and select the `chrome-extension/` folder.
 5. Open [internshala.com/internships](https://internshala.com/internships), apply filters, and click **Saved filters** in the bottom-left corner.
 
-The extension requests no permissions. Chrome will show a host warning because it adds the panel to Internshala pages; that is expected.
+The extension requests only the `storage` permission, which keeps saved application answers out of the page's `localStorage`. Chrome will show a host warning because it adds the panel to Internshala pages; that is expected.
 
 ### Build the uploadable zip
 
@@ -55,7 +57,7 @@ The extension requests no permissions. Chrome will show a host warning because i
 npm.cmd run package
 ```
 
-The file is created at `dist/internshala-saved-filters-1.1.1.zip`. The zip has `manifest.json` at its root, ready for the Chrome Web Store.
+The file is created at `dist/internshala-saved-filters-1.2.0.zip`. The zip has `manifest.json` at its root, ready for the Chrome Web Store.
 
 See [`PUBLISHING.md`](PUBLISHING.md) for the full upload and review checklist.
 
@@ -108,6 +110,15 @@ The URL is cleaned before saving: tracking parameters and `page-2`-style paginat
 
 The file is created and read locally. Nothing is uploaded. This is useful when changing browsers or computers, because `localStorage` does not sync between them.
 
+### Reuse application answers
+
+1. Open an internship or job application form.
+2. The assistant scans the form and fills any question you have answered before.
+3. New questions appear in the card at the bottom right. Type your answer and choose **Save answer**, or **Skip** it for now.
+4. Open **Application answers** in the bottom-left to search, edit, or delete saved answers.
+
+Only exact question matches are filled. If a saved answer does not fit the field type or the available options, the assistant asks instead of guessing. File uploads, passwords, OTPs, CAPTCHAs, and consent checkboxes are never filled or stored. The assistant never clicks the final submit button.
+
 ## No-install alternative
 
 If you only need two or three searches, you do not need this extension at all:
@@ -126,7 +137,7 @@ Python is still a good choice if you later want something different, such as a s
 
 ## How it works
 
-- Detects whether the current page is an internship search, a job search, or a detail page.
+- Detects whether the current page is an internship search, a job search, a detail page, or an application form.
 - Reads the current URL and normalizes it:
   - removes `utm_*`, `gclid`, `fbclid`, and similar tracking parameters;
   - removes `page-N` from the path;
@@ -135,27 +146,33 @@ Python is still a good choice if you later want something different, such as a s
   `full-stack-development,front-end-development-internship-in-delhi` →  
   `Full Stack Development, Front End Development in Delhi`.
 - Stores presets and the last search in `localStorage` under the key `isf:v1`.
-- Exports and imports the same data as JSON, merging presets by their cleaned URL.
+- Reads application question labels and options, looks for an exact saved match, and fills text, select, radio, and checkbox fields through native events.
+- Stores saved answers separately (`chrome.storage.local` in the extension, `localStorage` in the userscript) so page scripts cannot read them.
+- Exports and imports the same filter data as JSON, merging presets by their cleaned URL.
 - Renders the UI inside a Shadow DOM so page styles cannot leak in.
-- Uses the URL as the source of truth. No clicks on Internshala's controls, no fragile selectors.
+- Uses the URL as the source of truth for filters. No clicks on Internshala's filter controls, no fragile selectors.
 
 The Chrome extension's content script is generated from the userscript, so both versions share the same behavior.
 
 ## Data and privacy
 
-- All data stays in `localStorage` on `internshala.com`.
-- The extension makes no network requests and does not read your account, applications, messages, or credentials.
+- Saved searches and settings stay in `localStorage` on `internshala.com` under `isf:v1`.
+- Saved application answers stay in `chrome.storage.local` when the extension is used, and in `localStorage` under `isf:answers:v1` in the userscript.
+- The extension makes no network requests. It reads application form labels and options only on Internshala application pages, so it can match and fill saved answers.
+- It does not read your account profile, applications, messages, resume files, or credentials, and it never submits a form.
 - The toolbar popup is a static help card with a link to Internshala.
-- Clearing the site's cookies/site data removes the saved searches.
-- Saved searches do not sync between browsers or devices. Use Export/Import to move them.
+- Clearing the site's cookies/site data removes saved searches; extension storage is removed by uninstalling the extension or clearing its data.
+- Saved searches and answers do not sync between browsers or devices. Use Export/Import to move searches.
 
 The full policy is in [`store/privacy-policy.md`](store/privacy-policy.md).
 
 ## Limitations
 
-- Presets are per browser profile.
+- Presets and answers are per browser profile.
 - Only `https://internshala.com` links are accepted; invalid or non-Internshala links are ignored.
 - Imports are capped at 2 MB / 500 presets to keep the panel responsive. Saving new searches is not capped.
+- Answers match only when the question text is the same (ignoring case, spacing, and required markers). Reworded questions are asked again.
+- The assistant never attaches files, solves CAPTCHAs, signs in, or submits an application for you.
 - If Internshala changes its URL scheme, older saved URLs may stop working.
 - Filters that are stored only in a cookie or in "As per my preferences" may not be represented in the URL, so they may not be captured.
 - This is an unofficial helper and is not affiliated with Internshala.
@@ -200,7 +217,7 @@ npm.cmd run package
 See [`PUBLISHING.md`](PUBLISHING.md). The short version:
 
 1. Test with **Load unpacked**.
-2. Upload `dist/internshala-saved-filters-1.1.1.zip` to the Chrome Web Store Developer Dashboard.
+2. Upload `dist/internshala-saved-filters-1.2.0.zip` to the Chrome Web Store Developer Dashboard.
 3. Use the copy in [`store/listing.md`](store/listing.md).
 4. Answer the privacy questions as "no data collected."
 5. Submit for review.
