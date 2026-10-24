@@ -3297,6 +3297,26 @@
       color: #96a9b7;
     }
 
+    /*
+     * Page add-ons (grammar checkers) sometimes overlay our fields with a
+     * mirror element and hide the native caret. Keep our own text and caret
+     * above anything they insert.
+     */
+    .isf-input,
+    .isf-textarea {
+      color: var(--ink) !important;
+      -webkit-text-fill-color: var(--ink) !important;
+      caret-color: var(--ink) !important;
+      background-color: #ffffff !important;
+      position: relative;
+      z-index: 2;
+    }
+
+    .isf-q-item {
+      position: relative;
+      isolation: isolate;
+    }
+
     .isf-qcard {
       position: fixed;
       right: 20px;
@@ -4830,6 +4850,49 @@
     return drafts;
   }
 
+  /**
+   * Grammar add-ons (LanguageTool, QuillBot, Grammarly) inject mirror overlays
+   * into editable fields, even inside an open shadow root. Their overlay can
+   * hide our native text and caret, so keep our fields opted out and remove
+   * any overlay host that still appears.
+   */
+  function markFieldPrivate(field) {
+    if (!field || field.nodeType !== 1) return;
+
+    field.setAttribute('data-gramm', 'false');
+    field.setAttribute('data-gramm_editor', 'false');
+    field.setAttribute('data-enable-grammarly', 'false');
+    field.setAttribute('data-lt-active', 'false');
+    field.setAttribute('spellcheck', 'false');
+    field.setAttribute('autocorrect', 'off');
+    field.setAttribute('autocapitalize', 'off');
+  }
+
+  function markFieldsPrivate(scope) {
+    if (!scope || !scope.querySelectorAll) return;
+    scope.querySelectorAll('input, textarea, select').forEach(markFieldPrivate);
+  }
+
+  function isForeignEnhancer(node) {
+    if (!node || node.nodeType !== 1) return false;
+
+    const tag = node.tagName.toLowerCase();
+    if (tag.startsWith('lt-') || tag.startsWith('qb-')) return true;
+    if (tag.startsWith('grammarly')) return true;
+    if (tag === 'template' && node.hasAttribute('shadowrootmode')) return true;
+
+    const className = node.getAttribute('class') || '';
+    return /(?:^|\s)(?:lt-|qb-|grammarly)/i.test(className);
+  }
+
+  function stripForeignEnhancers(scope) {
+    if (!scope || !scope.querySelectorAll) return;
+
+    for (const node of Array.from(scope.querySelectorAll('*'))) {
+      if (isForeignEnhancer(node)) node.remove();
+    }
+  }
+
   function renderQuestionCard(blockers = []) {
     if (!uiReady) return;
 
@@ -4944,6 +5007,8 @@
         if (group.type === 'email') input.autocomplete = 'email';
       }
 
+      markFieldPrivate(input);
+
       if (input.matches('input, textarea, select')) {
         input.dataset.qKey = group.key;
         if (!input.id) input.id = 'isf-q-' + group.key.replace(/[^a-z0-9_-]/gi, '-');
@@ -5017,6 +5082,9 @@
 
     el.qcardList.replaceChildren(fragment);
     el.qcard.hidden = false;
+
+    markFieldsPrivate(el.qcard);
+    stripForeignEnhancers(shadow);
 
     el.fabCount.hidden = false;
     el.fabCount.textContent = String(pending.length);
@@ -6191,6 +6259,9 @@
     } else {
       el.fab.title = 'Apply helper';
     }
+
+    markFieldsPrivate(shadow);
+    stripForeignEnhancers(shadow);
   }
 
   /* ------------------------------------------------------------------ *
@@ -6445,6 +6516,16 @@
       event.stopPropagation();
     }
   }, true);
+
+  // Remove grammar-checker overlays that land inside the panel.
+  let enhancerGuardTimer = 0;
+  const enhancerGuard = new MutationObserver(() => {
+    window.clearTimeout(enhancerGuardTimer);
+    enhancerGuardTimer = window.setTimeout(() => {
+      stripForeignEnhancers(shadow);
+    }, 120);
+  });
+  enhancerGuard.observe(shadow, { childList: true, subtree: true });
 
   document.addEventListener('click', (event) => {
     if (!panelOpen) return;
