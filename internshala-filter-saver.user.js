@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Internshala Saved Filters
 // @namespace    https://internshala.com/
-// @version      1.3.0
+// @version      1.3.1
 // @description  Save Internshala searches, reuse answers to repeat application questions, and work through applications with a manual submit. Local-only.
 // @author       You
 // @match        https://internshala.com/*

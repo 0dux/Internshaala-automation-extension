@@ -2,7 +2,7 @@
 
 A Chrome extension (and optional Tampermonkey userscript) that remembers your Internshala search filters, restores them in one click, reuses your answers to repeat application questions, and walks through listings with an assisted apply queue that you submit yourself.
 
-Current release: **1.3.0** — filters, reusable answers, and the assisted apply queue. Title-keyword filtering and auto-submit are not included yet.
+Current release: **1.3.1** — filters, reusable answers, and the assisted apply queue, with fixes for the real site's apply card. Title-keyword filtering and auto-submit are not included yet.
 
 ![Saved filters panel](preview.png)
 
@@ -63,7 +63,7 @@ The extension requests only the `storage` permission, which keeps saved applicat
 npm.cmd run package
 ```
 
-The file is created at `dist/internshala-saved-filters-1.3.0.zip`. The zip has `manifest.json` at its root and contains only the eight runtime files, ready for the Chrome Web Store.
+The file is created at `dist/internshala-saved-filters-1.3.1.zip`. The zip has `manifest.json` at its root and contains only the eight runtime files, ready for the Chrome Web Store.
 
 Store-submission notes live in `PUBLISHING.md` and `store/listing.md`, which are kept locally and are not committed to Git. See [`COMMANDS.md`](COMMANDS.md) for every build, test, and release command.
 
@@ -252,11 +252,11 @@ The extension is covered by a CDP harness that drives Chrome for Testing 136 and
 
 ## Publishing
 
-The zip is already built at `dist/internshala-saved-filters-1.3.0.zip`. To publish a new build:
+The zip is already built at `dist/internshala-saved-filters-1.3.1.zip`. To publish a new build:
 
 1. Test with **Load unpacked**.
 2. Run `npm.cmd run package`.
-3. Upload `dist/internshala-saved-filters-1.3.0.zip` to the Chrome Web Store Developer Dashboard.
+3. Upload `dist/internshala-saved-filters-1.3.1.zip` to the Chrome Web Store Developer Dashboard.
 4. Use the copy in `store/listing.md` and follow `PUBLISHING.md`; both are kept locally and are not committed.
 5. Answer the privacy questions as "no data collected."
 6. Submit for review.
