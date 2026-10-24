@@ -1,6 +1,6 @@
 {
   "name": "internshala-saved-filters",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "private": true,
   "type": "module",
   "description": "Chrome extension + Tampermonkey userscript for saving Internshala searches and reusing application answers.",
