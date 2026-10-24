@@ -6429,6 +6429,16 @@
     markApplicationApplied(item).catch(() => toast('Could not record the application'));
   });
 
+  // A site modal (Bootstrap) traps focus by pulling it back on focusin.
+  // Elements inside our shadow root look "outside" the modal to that handler,
+  // so stop those events before the page sees them. Otherwise the question
+  // card's text field can never keep focus.
+  document.addEventListener('focusin', (event) => {
+    if (event.composedPath && event.composedPath().includes(host)) {
+      event.stopPropagation();
+    }
+  }, true);
+
   document.addEventListener('click', (event) => {
     if (!panelOpen) return;
     if (!event.isTrusted) return;
